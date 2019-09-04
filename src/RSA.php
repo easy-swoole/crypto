@@ -12,39 +12,32 @@ class RSA
     const RSA_DECRYPT_128 = 128;
     const RSA_ENCRYPT_117 = 117;
 
-    const OPENSSL_ALGO_SHA1 = 'OPENSSL_ALGO_SHA1';
-    const OPENSSL_ALGO_MD5 = 'OPENSSL_ALGO_MD5';
-    const OPENSSL_ALGO_MD4 = 'OPENSSL_ALGO_MD4';
-    const OPENSSL_ALGO_MD2 = 'OPENSSL_ALGO_MD2';
-    const OPENSSL_ALGO_DSS1 = 'OPENSSL_ALGO_DSS1';
-    const OPENSSL_ALGO_SHA224 = 'OPENSSL_ALGO_SHA224';
-    const OPENSSL_ALGO_SHA256 = 'OPENSSL_ALGO_SHA256';
-    const OPENSSL_ALGO_SHA384 = 'OPENSSL_ALGO_SHA384';
-    const OPENSSL_ALGO_SHA512 = 'OPENSSL_ALGO_SHA512';
-    const OPENSSL_ALGO_RMD160 = 'OPENSSL_ALGO_RMD160';
-
     public function __construct($publicKey,$privateKey)
     {
-        $this->publicKey = openssl_get_publickey($this->transform('public',$publicKey));
-        $this->privateKey = openssl_get_privatekey($this->transform('private',$privateKey));
+        $publicKey = $this->transform('public',$publicKey);
+        $privateKey = $this->transform('private',$privateKey);
+        $this->publicKey = openssl_get_publickey($publicKey);
+        $this->privateKey = openssl_get_privatekey($privateKey);
     }
 
     /**
      * 公钥加密
-     * @param $data
-     * @param $max_encrypt_block int 分断加密字节数
+     * @param $data string 加密数据
+     * @param $max_encrypt_block int 分段加密
      * @return bool|string
      */
     public function encrypt($data,$max_encrypt_block = RSA::RSA_ENCRYPT_117)
     {
         //加密数据
         $encrypt_data = '';
-        $plain_data = str_split(base64_decode($data), $max_encrypt_block);
+        $plain_data = str_split($data, $max_encrypt_block);
         foreach ($plain_data as $chunk){
             $str = '';
-            $ok = openssl_public_encrypt($chunk, $encrypt_data, $this->publicKey);
-            if (!$ok) return false;
-            $encrypt_data .= $str;
+            if (openssl_public_encrypt($chunk, $str, $this->publicKey)){
+                $encrypt_data .= $str;
+                continue;
+            }
+            return false;
         }
         return base64_encode($encrypt_data);
     }
@@ -52,34 +45,35 @@ class RSA
     /**
      * 私钥分段解密
      * @param $data string 加密数据
-     * @param int $max_decrypt_block 默认128
+     * @param $max_decrypt_block int 分段加密
      * @return bool|string
      */
     public function decrypt(string $data,int $max_decrypt_block = RSA::RSA_DECRYPT_128)
     {
         $decrypted = '';
         $plain_data = str_split(base64_decode($data), $max_decrypt_block);
-        foreach($plain_data as $chunk){
+        foreach($plain_data as $chunk) {
             $str = '';
             //私钥解密
-            $ok = openssl_private_decrypt($chunk,$str,$this->privateKey);
-            if($ok === false){
-                return false;
+            if (openssl_private_decrypt($chunk, $str, $this->privateKey)) {
+                $decrypted .= $str;
+                continue;
             }
-            $decrypted .= $str;
+            return false;
         }
         return $decrypted;
     }
 
     /**
      * 私钥签名
-     * @param string $data
+     * @param string $data 数据
+     * @param string $signature_alg 加密算法
      * @return string
      */
-    public function sign(string $data)
+    public function sign(string $data,$signature_alg)
     {
         $signature = '';
-        openssl_sign($data, $signature, $this->privateKey);
+        openssl_sign($data, $signature, $this->privateKey,$signature_alg);
         openssl_free_key($this->privateKey);
         $signature = base64_encode($signature);
         return $signature;
@@ -92,7 +86,7 @@ class RSA
      * @param string $signature_alg  加密算法
      * @return bool
      */
-    public function isValid(string $data, string $signature,$signature_alg = RSA::OPENSSL_ALGO_SHA1)
+    public function isValid(string $data, string $signature,$signature_alg)
     {
         $result = openssl_verify($data, base64_decode($signature), $this->publicKey, $signature_alg);
         if ($result === 1){
@@ -113,13 +107,13 @@ class RSA
         switch ($type)
         {
             case 'private':
-                if (strpos($key,'BEGIN RSA PRIVATE KEY')){
+                if (!strpos($key,'BEGIN RSA PRIVATE KEY')){
                     $str = chunk_split($key, 64, "\n");
                     $key = "-----BEGIN RSA PRIVATE KEY-----\n$str-----END RSA PRIVATE KEY-----\n";
                 }
                 break;
             case 'public' :
-                if (strpos($key,'BEGIN PUBLIC KEY')){
+                if (!strpos($key,'BEGIN PUBLIC KEY')){
                     $str = chunk_split($key, 64, "\n");
                     $key = "-----BEGIN PUBLIC KEY-----\n$str-----END PUBLIC KEY-----\n";
                 }
