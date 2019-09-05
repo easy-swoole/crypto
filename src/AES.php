@@ -91,10 +91,40 @@ class AES
     private function checkCipherMethods($name)
     {
         $methods = openssl_get_cipher_methods();
-        if (in_array(strtoupper($name), $methods)) {
+        if (in_array(strtolower($name), $methods)) {
             return true;
         }
         throw new \InvalidArgumentException("aes cipher method " . $name . ' is not support!');
+    }
+    
+    
+    /**
+     * 加密数据 返回 base64编码
+     *
+     * @param $data
+     *
+     * @return string|false
+     */
+    public function encryptBase64 ($data)
+    {
+        $encryptData = $this->encrypt($data);
+        if ($encryptData) {
+            return base64_encode($encryptData);
+        }
+        return false;
+    }
+
+    /**
+     * 解密经过base64编码后的数据
+     *
+     * @param $data
+     *
+     * @return string|false
+     */
+    public function decryptBase64 ($data)
+    {
+        $base64 = base64_decode($data);
+        return $this->decrypt($base64);
     }
 
 }
